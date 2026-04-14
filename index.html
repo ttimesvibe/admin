@@ -307,6 +307,7 @@ async function loadUsers() {
               <td style="color:#9CA3AF;font-size:12px">${timeAgo(u.lastLogin)}</td>
               <td><span class="badge ${u.active !== false ? "badge-active" : "badge-inactive"}">${u.active !== false ? "활성" : "비활성"}</span></td>
               <td style="text-align:right">
+                <button class="btn btn-outline btn-sm edit-user-btn" data-email="${escHtml(u.email)}" data-name="${escHtml(u.name || "")}" data-role="${u.role}">편집</button>
                 <button class="btn btn-warning btn-sm reset-pw-btn" data-email="${escHtml(u.email)}">비번 초기화</button>
                 <button class="btn btn-danger btn-sm delete-user-btn" data-email="${escHtml(u.email)}" data-name="${escHtml(u.name || u.email)}">삭제</button>
               </td>
@@ -316,6 +317,7 @@ async function loadUsers() {
     </div>`;
 
   $("#addUserBtn").onclick = showCreateUserModal;
+  $$(".edit-user-btn").forEach(b => b.onclick = () => showEditUserModal(b.dataset.email, b.dataset.name, b.dataset.role));
   $$(".reset-pw-btn").forEach(b => b.onclick = () => showResetPwModal(b.dataset.email));
   $$(".delete-user-btn").forEach(b => b.onclick = () => handleDeleteUser(b.dataset.email, b.dataset.name));
 }
@@ -376,6 +378,66 @@ function showCreateUserModal() {
     if (!data.success) {
       errEl.innerHTML = `<div class="alert alert-error">${escHtml(data.error)}</div>`;
       btn.disabled = false; btn.textContent = "생성";
+      return;
+    }
+    overlay.remove();
+    loadUsers();
+  };
+}
+
+// ── Edit User Modal ──
+
+function showEditUserModal(email, name, role) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal">
+      <h2>사용자 편집</h2>
+      <form id="editUserForm">
+        <div class="form-group">
+          <label>아이디</label>
+          <input type="text" id="euEmail" value="${escHtml(email)}" disabled style="opacity:.5;cursor:not-allowed">
+        </div>
+        <div class="form-group">
+          <label>이름</label>
+          <input type="text" id="euName" value="${escHtml(name)}" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>역할</label>
+          <select id="euRole">
+            <option value="editor" ${role==="editor"?"selected":""}>editor</option>
+            <option value="admin" ${role==="admin"?"selected":""}>admin</option>
+          </select>
+        </div>
+        <div id="euError"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="euCancel">취소</button>
+          <button type="submit" class="btn btn-primary" id="euSubmit">저장</button>
+        </div>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.querySelector("#euCancel").onclick = () => overlay.remove();
+  overlay.querySelector("#editUserForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = overlay.querySelector("#euSubmit");
+    const errEl = overlay.querySelector("#euError");
+    btn.disabled = true; btn.textContent = "저장 중...";
+    errEl.innerHTML = "";
+
+    const newName = overlay.querySelector("#euName").value.trim();
+    const newRole = overlay.querySelector("#euRole").value;
+
+    const data = await authFetch("/admin/update-user", {
+      method: "POST",
+      body: { email, name: newName, role: newRole },
+    });
+
+    if (!data) { overlay.remove(); return; }
+    if (!data.success) {
+      errEl.innerHTML = `<div class="alert alert-error">${escHtml(data.error)}</div>`;
+      btn.disabled = false; btn.textContent = "저장";
       return;
     }
     overlay.remove();
